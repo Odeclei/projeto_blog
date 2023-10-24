@@ -1,6 +1,9 @@
 # Flake8: noqa
 
+from django.contrib.auth.models import User
 from django.db import models
+from django.urls import reverse
+from utils.images import resize_image
 from utils.rands import slugfy_new
 
 # Create your models here.
@@ -85,17 +88,46 @@ class Post(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='page_created_by'
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='page_updated_by'
+    )
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True, blank=True, default=None,
     )
 
     tags = models.ManyToManyField(Tag, blank=True, default='')
 
+    def get_absolute_url(self):
+        if not self.is_published:
+            return reverse('blog:index')
+        return reverse("blog:post", args=(self.slug,))
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugfy_new(self.title)
 
-        return super().save(*args, **kwargs)
+        # do something
+        current_cover_name = str(self.cover.name)
+
+        super_save = super().save(*args, **kwargs)
+        cover_changed = False
+
+        if self.cover:
+            cover_changed = current_cover_name != self.cover.name
+
+        if cover_changed:
+            resize_image(self.cover, 900)
+
+        return super_save
 
     def __str__(self) -> str:
         return self.title
